@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AgentQA</title>
+<style>
+  :root {
+    --bg:#0d1420; --panel:#151d2c; --line:#243044; --text:#e8ecf4;
+    --dim:#8892a6; --gold:#d9a13c; --green:#1f9d76; --red:#d0574a;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); margin:0; padding:28px 34px;
+         font-family:'Segoe UI',system-ui,Arial,sans-serif; }
+
+  header { display:flex; align-items:baseline; gap:14px; margin-bottom:6px; }
+  h1 { font-size:21px; margin:0; letter-spacing:-.3px; }
+  .badge { font-size:11px; text-transform:uppercase; letter-spacing:.8px;
+           padding:3px 9px; border-radius:20px; background:var(--panel);
+           border:1px solid var(--line); color:var(--dim); }
+  .badge.live { color:var(--green); border-color:var(--green); }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:22px; }
+  .sub b { color:var(--text); font-weight:600; }
+
+  .grid { display:grid; grid-template-columns: 1fr 340px; gap:22px; align-items:start; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px;
+              color:var(--dim); margin:0 0 14px; font-weight:600; }
+
+  svg { width:100%; height:auto; display:block; }
+  .nbox { fill:#1b2434; stroke:#2b3648; stroke-width:1.5; transition:all .3s; }
+  .nbox.running { fill:#4a3a12; stroke:var(--gold); stroke-width:2.5; }
+  .nbox.ok      { fill:#0f3d31; stroke:var(--green); stroke-width:2; }
+  .nbox.failed  { fill:#4a1d1d; stroke:var(--red); stroke-width:2; }
+  .nlabel { fill:var(--text); font-size:13px; font-weight:600; text-anchor:middle; }
+  .nrole  { fill:var(--dim); font-size:10.5px; text-anchor:middle; }
+  .ntime  { fill:var(--gold); font-size:10px; text-anchor:middle; }
+  .edge { stroke:#39455c; stroke-width:2; fill:none; }
+  .edge.active { stroke:var(--gold); stroke-width:3; }
+  .edge.loop { stroke:#39455c; stroke-width:2; stroke-dasharray:5 4; fill:none; }
+  .edgelabel { fill:var(--dim); font-size:10px; text-anchor:middle; }
+  .nbox.running + .glow { animation:breathe 1.3s ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{opacity:.15} 50%{opacity:.45} }
+
+  .stat { display:flex; justify-content:space-between; padding:8px 0;
+          border-bottom:1px solid #1d2637; font-size:13px; }
+  .stat:last-child { border:none; }
+  .stat .k { color:var(--dim); }
+  .stat .v { font-weight:600; text-align:right; max-width:190px; }
+  .v.high { color:var(--red); } .v.medium { color:var(--gold); } .v.low { color:var(--green); }
+  .finding { font-size:12.5px; line-height:1.55; color:#cbd3e1; margin-top:10px;
+             padding:11px 13px; background:#1a2333; border-left:3px solid var(--red);
+             border-radius:0 6px 6px 0; }
+  .finding.good { border-left-color:var(--green); }
+
+  table { border-collapse:collapse; width:100%; font-size:12.5px; margin-top:4px; }
+  th { text-align:left; color:var(--dim); font-weight:500; padding:7px 10px;
+       border-bottom:1px solid var(--line); font-size:11px;
+       text-transform:uppercase; letter-spacing:.5px; }
+  td { padding:7px 10px; border-bottom:1px solid #1a2231; }
+  tr:last-child td { border:none; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+  .pill.ok{background:#0f3d31;color:#4fd1a5}
+  .pill.failed{background:#4a1d1d;color:#ef8b7f}
+  .empty { color:var(--dim); font-size:13px; padding:16px 0; text-align:center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AgentQA</h1>
+  <span class="badge" id="conn">connecting</span>
+</header>
+<div class="sub" id="current">Waiting for a merge request…</div>
+
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h2>Agent graph</h2>
+      <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M1 1L9 5L1 9" fill="none" stroke="#39455c" stroke-width="1.8" stroke-linecap="round"/>
+          </marker>
+        </defs>
+
+        <line class="edge" id="e-ANALYST" x1="168" y1="58" x2="196" y2="58" marker-end="url(#ah)"/>
+        <line class="edge" id="e-TEST_WRITER" x1="352" y1="58" x2="380" y2="58" marker-end="url(#ah)"/>
+        <line class="edge" id="e-RUNNER" x1="536" y1="58" x2="564" y2="58" marker-end="url(#ah)"/>
+
+        <g id="g-ANALYST">
+          <rect class="nbox" x="24" y="24" width="144" height="68" rx="10"/>
+          <rect class="glow" x="24" y="24" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="96" y="52">Analyst</text>
+          <text class="nrole"  x="96" y="70">reads MR + source</text>
+          <text class="ntime"  x="96" y="86" id="t-ANALYST"></text>
+        </g>
+        <g id="g-TEST_WRITER">
+          <rect class="nbox" x="208" y="24" width="144" height="68" rx="10"/>
+          <rect class="glow" x="208" y="24" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="280" y="52">Test writer</text>
+          <text class="nrole"  x="280" y="70">generates JUnit</text>
+          <text class="ntime"  x="280" y="86" id="t-TEST_WRITER"></text>
+        </g>
+        <g id="g-RUNNER">
+          <rect class="nbox" x="392" y="24" width="144" height="68" rx="10"/>
+          <rect class="glow" x="392" y="24" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="464" y="52">Runner</text>
+          <text class="nrole"  x="464" y="70">docker mvn test</text>
+          <text class="ntime"  x="464" y="86" id="t-RUNNER"></text>
+        </g>
+        <g id="g-TRIAGE">
+          <rect class="nbox" x="576" y="24" width="144" height="68" rx="10"/>
+          <rect class="glow" x="576" y="24" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="648" y="52">Triage</text>
+          <text class="nrole"  x="648" y="70">bad test or bad code?</text>
+          <text class="ntime"  x="648" y="86" id="t-TRIAGE"></text>
+        </g>
+
+        <path class="edge" id="e-pass" d="M464 92 L464 128 L96 128 L96 172" marker-end="url(#ah)"/>
+        <text class="edgelabel" x="280" y="122">tests pass → skip triage</text>
+
+        <path class="edge loop" id="e-loop" d="M648 92 L648 150 L280 150 L280 96" marker-end="url(#ah)"/>
+        <text class="edgelabel" x="470" y="164">TEST_ERROR → rewrite (max 3)</text>
+
+        <path class="edge" id="e-TRIAGE" d="M720 58 L744 58 L744 206 L392 206" marker-end="url(#ah)"/>
+        <text class="edgelabel" x="600" y="200">CODE_DEFECT</text>
+
+        <g id="g-FIXER">
+          <rect class="nbox" x="240" y="172" width="144" height="68" rx="10"/>
+          <rect class="glow" x="240" y="172" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="312" y="200">Fixer</text>
+          <text class="nrole"  x="312" y="218">verifies + opens MR</text>
+          <text class="ntime"  x="312" y="234" id="t-FIXER"></text>
+        </g>
+        <line class="edge" id="e-FIXER" x1="240" y1="206" x2="172" y2="206" marker-end="url(#ah)"/>
+        <g id="g-REPORTER">
+          <rect class="nbox" x="24" y="172" width="144" height="68" rx="10"/>
+          <rect class="glow" x="24" y="172" width="144" height="68" rx="10" fill="#d9a13c" opacity="0"/>
+          <text class="nlabel" x="96" y="200">Reporter</text>
+          <text class="nrole"  x="96" y="218">comments on MR</text>
+          <text class="ntime"  x="96" y="234" id="t-REPORTER"></text>
+        </g>
+
+        <text class="edgelabel" x="380" y="278">Every step is recorded — retries appear as separate attempts</text>
+      </svg>
+    </div>
+
+    <div class="panel" style="margin-top:22px;">
+      <h2>Step timeline</h2>
+      <table>
+        <thead><tr><th>Run</th><th>Agent</th><th>Attempt</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody id="log"><tr><td colspan="5" class="empty">No steps yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>This run</h2>
+      <div class="stat"><span class="k">Merge request</span><span class="v" id="s-mr">—</span></div>
+      <div class="stat"><span class="k">Risk</span><span class="v" id="s-risk">—</span></div>
+      <div class="stat"><span class="k">Tests generated</span><span class="v" id="s-tests">—</span></div>
+      <div class="stat"><span class="k">Build</span><span class="v" id="s-build">—</span></div>
+      <div class="stat"><span class="k">Writer attempts</span><span class="v" id="s-att">—</span></div>
+      <div class="stat"><span class="k">Verdict</span><span class="v" id="s-verdict">—</span></div>
+      <div class="stat"><span class="k">Fix MR</span><span class="v" id="s-fix">—</span></div>
+      <div class="stat"><span class="k">Elapsed</span><span class="v" id="s-time">—</span></div>
+      <div id="s-finding"></div>
+    </div>
+
+    <div class="panel" style="margin-top:22px;">
+      <h2>Recent runs</h2>
+      <table>
+        <tbody id="hist"><tr><td class="empty">Nothing yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const NODES = ["ANALYST","TEST_WRITER","RUNNER","TRIAGE","FIXER","REPORTER"];
+let runId = null, started = null, timer = null, hist = [];
+
+function el(id){ return document.getElementById(id); }
+
+function resetGraph(){
+  NODES.forEach(n => {
+    el("g-"+n).querySelector(".nbox").setAttribute("class","nbox");
+    el("g-"+n).querySelector(".glow").style.animation = "";
+    el("t-"+n).textContent = "";
+  });
+  document.querySelectorAll(".edge").forEach(e => e.classList.remove("active"));
+  ["s-mr","s-risk","s-tests","s-build","s-att","s-verdict","s-fix","s-time"]
+    .forEach(i => { el(i).textContent = "—"; el(i).className = "v"; });
+  el("s-finding").innerHTML = "";
+  el("log").innerHTML = '<tr><td colspan="5" class="empty">No steps yet</td></tr>';
+}
+
+function tick(){
+  if (!started) return;
+  el("s-time").textContent = ((Date.now()-started)/1000).toFixed(1) + "s";
+}
+
+function setNode(agent, cls, ms){
+  const box = el("g-"+agent)?.querySelector(".nbox");
+  if (!box) return;
+  box.setAttribute("class","nbox "+cls);
+  const glow = el("g-"+agent).querySelector(".glow");
+  glow.style.animation = cls === "running" ? "breathe 1.3s ease-in-out infinite" : "";
+  if (ms) el("t-"+agent).textContent = (ms/1000).toFixed(1)+"s";
+}
+
+function addRow(s){
+  const body = el("log");
+  if (body.querySelector(".empty")) body.innerHTML = "";
+  const r = body.insertRow(0);
+  r.innerHTML = `<td>#${s.runId}</td><td>${s.agent}</td><td>${s.attempt}</td>`
+              + `<td><span class="pill ${s.state}">${s.state}</span></td>`
+              + `<td>${(s.detail||"").slice(0,70)}</td>`;
+}
+
+function pushHistory(){
+  if (!runId) return;
+  hist.unshift({ run:runId, mr:el("s-mr").textContent,
+                 verdict:el("s-verdict").textContent, time:el("s-time").textContent });
+  hist = hist.slice(0,6);
+  el("hist").innerHTML = hist.map(h =>
+    `<tr><td>#${h.run}</td><td>${h.mr}</td><td>${h.verdict}</td><td>${h.time}</td></tr>`).join("");
+}
+
+const es = new EventSource("/dashboard/stream");
+es.onopen = () => { el("conn").textContent = "live"; el("conn").className = "badge live"; };
+es.onerror = () => { el("conn").textContent = "reconnecting"; el("conn").className = "badge"; };
+
+es.onmessage = e => {
+  const s = JSON.parse(e.data);
+
+  if (s.runId !== runId) {
+    pushHistory();
+    runId = s.runId;
+    resetGraph();
+    started = Date.now();
+    clearInterval(timer); timer = setInterval(tick, 100);
+    el("current").innerHTML = `Run <b>#${s.runId}</b> · merge request <b>!${s.mrIid}</b>`;
+    el("s-mr").textContent = "!" + s.mrIid;
+  }
+
+  setNode(s.agent, s.state, s.ms);
+  if (s.state !== "running") addRow(s);
+
+  document.querySelectorAll(".edge").forEach(x => x.classList.remove("active"));
+  if (s.state === "running") {
+    const edge = el("e-" + s.agent);
+    if (edge) edge.classList.add("active");
+  }
+
+  if (s.agent === "TEST_WRITER") el("s-att").textContent = s.attempt;
+  if (s.risk)    { el("s-risk").textContent = s.risk;
+                   el("s-risk").className = "v " + s.risk.toLowerCase(); }
+  if (s.tests)   el("s-tests").textContent = s.tests;
+  if (s.build)   el("s-build").textContent = s.build;
+  if (s.verdict) el("s-verdict").textContent = s.verdict;
+  if (s.fixMr)   el("s-fix").textContent = "!" + s.fixMr;
+  if (s.finding) el("s-finding").innerHTML =
+      `<div class="finding${s.verdict==='OK'?' good':''}">${s.finding}</div>`;
+
+  if (s.agent === "REPORTER" && s.state === "ok") {
+    clearInterval(timer); tick();
+  }
+};
+</script>
+</body>
+</html>

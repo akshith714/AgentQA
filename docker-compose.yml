@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: agentqa-postgres
+    environment:
+      POSTGRES_DB: agentqa
+      POSTGRES_USER: agentqa
+      POSTGRES_PASSWORD: agentqa
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
