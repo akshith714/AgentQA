@@ -89,6 +89,46 @@ class WebhookControllerTest {
         verify(runs, never()).save(any());
     }
 
+    /** A branch pipeline fires before the merge request exists and sends an empty iid. */
+    private JsonNode branchPipelinePayload(String rawIid, String rawProjectId) {
+        return MAPPER.readTree("""
+                {
+                  "object_kind": "merge_request",
+                  "project": {"id": %s},
+                  "object_attributes": {
+                    "iid": %s,
+                    "action": "open",
+                    "source_branch": "feature/x",
+                    "last_commit": {"id": "abc123"}
+                  }
+                }
+                """.formatted(rawProjectId, rawIid));
+    }
+
+    @Test
+    void anEmptyIidIsIgnoredRatherThanThrowing() {
+        ResponseEntity<String> response =
+                controller.gitlab(SECRET, branchPipelinePayload("\"\"", "7"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo("ignored: no MR");
+        verify(runs, never()).save(any());
+    }
+
+    @Test
+    void aMissingIidIsIgnored() {
+        assertThat(controller.gitlab(SECRET, branchPipelinePayload("null", "7")).getBody())
+                .isEqualTo("ignored: no MR");
+        verify(runs, never()).save(any());
+    }
+
+    @Test
+    void anEmptyProjectIdIsIgnored() {
+        assertThat(controller.gitlab(SECRET, branchPipelinePayload("42", "\"\"")).getBody())
+                .isEqualTo("ignored: no MR");
+        verify(runs, never()).save(any());
+    }
+
     @Test
     void queuesAGenuineChange() {
         ResponseEntity<String> response = controller.gitlab(SECRET, payload("feature/x", "open"));

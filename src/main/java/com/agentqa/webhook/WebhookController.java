@@ -61,8 +61,14 @@ public class WebhookController {
             return ResponseEntity.ok("ignored action: " + action);
         }
 
-        Long projectId = payload.path("project").path("id").asLong();
-        Long mrIid = attrs.path("iid").asLong();
+        // a branch pipeline sends "iid": "" and Jackson refuses to coerce that, so every
+        // one of these reads takes a default rather than throwing a 500 GitLab will retry
+        Long projectId = payload.path("project").path("id").asLong(0);
+        Long mrIid = attrs.path("iid").asLong(0);
+        if (mrIid == 0 || projectId == 0) {
+            log.info("Ignoring event with no merge request iid");
+            return ResponseEntity.ok("ignored: no MR");
+        }
         String sourceBranch = attrs.path("source_branch").asString(null);
         String headSha = attrs.path("last_commit").path("id").asString(null);
 
