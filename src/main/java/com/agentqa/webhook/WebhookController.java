@@ -1,5 +1,7 @@
 package com.agentqa.webhook;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -14,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.agentqa.run.Run;
 import com.agentqa.run.RunRepository;
-import com.agentqa.security.ApiAuthFilter;
 import tools.jackson.databind.JsonNode;
 
 @RestController
@@ -32,12 +33,19 @@ public class WebhookController {
         this.secret = secret;
     }
 
+    /** Compares without leaking the answer through how long the comparison takes. */
+    private static boolean constantTimeEquals(String actual, String expected) {
+        return MessageDigest.isEqual(
+                actual.getBytes(StandardCharsets.UTF_8),
+                expected.getBytes(StandardCharsets.UTF_8));
+    }
+
     @PostMapping("/gitlab")
     public ResponseEntity<String> gitlab(
             @RequestHeader(value = "X-Gitlab-Token", required = false) String token,
             @RequestBody JsonNode payload) {
 
-        if (token == null || !ApiAuthFilter.constantTimeEquals(token, secret)) {
+        if (token == null || !constantTimeEquals(token, secret)) {
             log.warn("Webhook rejected: bad or missing X-Gitlab-Token");
             return ResponseEntity.status(401).body("invalid token");
         }
