@@ -2,9 +2,6 @@ package com.agentqa.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import org.junit.jupiter.api.Test;
 
 /** The string parsing that decides where files land in the sandbox. */
